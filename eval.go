@@ -810,6 +810,32 @@ func (v *evalVisitor) VisitMustache(node *ast.MustacheStatement) interface{} {
 	return str
 }
 
+// VisitMustache implements corresponding Visitor interface method
+func (v *evalVisitor) VisitSetDelimiter(node *ast.SetDelimiterStatement) interface{} {
+	v.at(node)
+
+	// evaluate expression
+	node.Assignment.Accept(v)
+
+	return nil
+}
+
+// VisitMustache implements corresponding Visitor interface method
+func (v *evalVisitor) VisitNewDelimiter(node *ast.NewDelimiterStatement) interface{} {
+	v.at(node)
+
+	// TODO(carolynvs): update the current delimiter
+
+	return ""
+}
+
+// VisitDelimiter implements corresponding Visitor interface method
+func (v *evalVisitor) VisitDelimiter(node *ast.Delimiter) interface{} {
+	v.at(node)
+
+	return node.Value
+}
+
 // VisitBlock implements corresponding Visitor interface method
 func (v *evalVisitor) VisitBlock(node *ast.BlockStatement) interface{} {
 	v.at(node)

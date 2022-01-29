@@ -82,6 +82,41 @@ func (v *printVisitor) VisitMustache(node *MustacheStatement) interface{} {
 	return nil
 }
 
+// VisitSetDelimiter implements corresponding Visitor interface method
+func (v *printVisitor) VisitSetDelimiter(node *SetDelimiterStatement) interface{} {
+	v.indent()
+	v.str("{{= ")
+
+	node.Assignment.Accept(v)
+
+	v.str(" =}}")
+
+	return nil
+}
+
+// VisitNewDelimiters implements corresponding Visitor interface method
+func (v *printVisitor) VisitNewDelimiter(node *NewDelimiterStatement) interface{} {
+	v.indent()
+	v.line("OPEN:")
+
+	v.depth++
+	node.OpenTag.Accept(v)
+	node.CloseTag.Accept(v)
+	v.depth--
+
+	v.line("CLOSE:")
+
+	return nil
+}
+
+// VisitDelimiter implements corresponding Visitor interface method
+func (v *printVisitor) VisitDelimiter(node *Delimiter) interface{} {
+	v.indent()
+	v.str("DELIM:")
+	v.line(node.Value)
+	return nil
+}
+
 // VisitBlock implements corresponding Visitor interface method
 func (v *printVisitor) VisitBlock(node *BlockStatement) interface{} {
 	v.inBlock = true

@@ -37,6 +37,11 @@ type Visitor interface {
 	VisitContent(*ContentStatement) interface{}
 	VisitComment(*CommentStatement) interface{}
 
+	// delimiters
+	VisitSetDelimiter(statement *SetDelimiterStatement) interface{}
+	VisitNewDelimiter(statement *NewDelimiterStatement) interface{}
+	VisitDelimiter(delimiter *Delimiter) interface{}
+
 	// expressions
 	VisitExpression(*Expression) interface{}
 	VisitSubExpression(*SubExpression) interface{}
@@ -66,6 +71,8 @@ const (
 
 	// NodeMustache is the mustache statement node
 	NodeMustache
+
+	NodeSetDelimiter
 
 	// NodeBlock is the block statement node
 	NodeBlock
@@ -219,6 +226,102 @@ func (node *MustacheStatement) String() string {
 // Accept is the receiver entry point for visitors.
 func (node *MustacheStatement) Accept(visitor Visitor) interface{} {
 	return visitor.VisitMustache(node)
+}
+
+//
+// NewDelimiterStatement
+//
+
+// SetDelimiterStatement represents a set delimiter node.
+type SetDelimiterStatement struct {
+	NodeType
+	Loc
+
+	Assignment *NewDelimiterStatement
+
+	// whitespace management
+	Strip *Strip
+}
+
+//NewSetDelimiterStatement instantiates a new set delimiter node.
+func NewSetDelimiterStatement(pos int, line int) *SetDelimiterStatement {
+	return &SetDelimiterStatement{
+		NodeType: NodeSetDelimiter,
+		Loc:      Loc{pos, line},
+	}
+}
+
+// String returns a string representation of receiver that can be used for debugging.
+func (node *SetDelimiterStatement) String() string {
+	return fmt.Sprintf("SetDelim{Pos: %d}", node.Loc.Pos)
+}
+
+// Accept is the receiver entry point for visitors.
+func (node *SetDelimiterStatement) Accept(visitor Visitor) interface{} {
+	return visitor.VisitSetDelimiter(node)
+}
+
+//
+// NewDelimiterStatement
+//
+
+// NewDelimiterStatement represents a set delimiter assignment
+type NewDelimiterStatement struct {
+	NodeType
+	Loc
+
+	OpenTag  *Delimiter
+	CloseTag *Delimiter
+}
+
+// NewNewDelimiterStatement instantiates a new set delimiter assignment.
+func NewNewDelimiterStatement(pos int, line int) *NewDelimiterStatement {
+	return &NewDelimiterStatement{
+		NodeType: NodeExpression,
+		Loc:      Loc{pos, line},
+	}
+}
+
+// String returns a string representation of receiver that can be used for debugging.
+func (node *NewDelimiterStatement) String() string {
+	return fmt.Sprintf("NewDelim{OpenTag:%s, CloseTag:%s, Pos:%d}", node.OpenTag, node.CloseTag, node.Loc.Pos)
+}
+
+// Accept is the receiver entry point for visitors.
+func (node *NewDelimiterStatement) Accept(visitor Visitor) interface{} {
+	return visitor.VisitNewDelimiter(node)
+}
+
+//
+// Delimiter
+//
+
+// Delimiter represents a template delimiter
+type Delimiter struct {
+	NodeType
+	Loc
+
+	Value string
+}
+
+// NewStringLiteral instantiates a new delimiter node.
+func NewDelimiter(pos int, line int, val string) *Delimiter {
+	return &Delimiter{
+		NodeType: NodeString,
+		Loc:      Loc{pos, line},
+
+		Value: val,
+	}
+}
+
+// String returns a string representation of receiver that can be used for debugging.
+func (node *Delimiter) String() string {
+	return fmt.Sprintf("Delimiter{Value:'%s', Pos:%d}", node.Value, node.Loc.Pos)
+}
+
+// Accept is the receiver entry point for visitors.
+func (node *Delimiter) Accept(visitor Visitor) interface{} {
+	return visitor.VisitDelimiter(node)
 }
 
 //

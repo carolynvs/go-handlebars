@@ -123,6 +123,9 @@ func (p *parser) parseStatement() ast.Node {
 	case lexer.TokenOpen, lexer.TokenOpenUnescaped:
 		// mustache
 		result = p.parseMustache()
+	case lexer.TokenSetDelimOpen:
+		// set delimiter
+		result = p.parseSetDelimiter()
 	case lexer.TokenOpenBlock:
 		// block
 		result = p.parseBlock()
@@ -153,7 +156,7 @@ func (p *parser) isStatement() bool {
 	}
 
 	switch p.next().Kind {
-	case lexer.TokenOpen, lexer.TokenOpenUnescaped, lexer.TokenOpenBlock,
+	case lexer.TokenOpen, lexer.TokenOpenUnescaped, lexer.TokenSetDelimOpen, lexer.TokenOpenBlock,
 		lexer.TokenOpenInverse, lexer.TokenOpenRawBlock, lexer.TokenOpenPartial,
 		lexer.TokenContent, lexer.TokenComment:
 		return true
@@ -217,6 +220,23 @@ func (p *parser) parseExpression(tok *lexer.Token) *ast.Expression {
 	result.Params, result.Hash = p.parseExpressionParamsHash()
 
 	return result
+}
+
+// openTag closeTag
+func (p *parser) parseNewDelimiters(tok *lexer.Token) *ast.NewDelimiterStatement {
+	result := ast.NewNewDelimiterStatement(tok.Pos, tok.Line)
+
+	tok = p.shift()
+	result.OpenTag = p.parseDelimiter(tok)
+
+	tok = p.shift()
+	result.CloseTag = p.parseDelimiter(tok)
+
+	return result
+}
+
+func (p *parser) parseDelimiter(tok *lexer.Token) *ast.Delimiter {
+	return ast.NewDelimiter(tok.Pos, tok.Line, tok.Val)
 }
 
 // rawBlock : openRawBlock content endRawBlock
@@ -483,6 +503,29 @@ func (p *parser) parseMustache() *ast.MustacheStatement {
 	result.Expression = p.parseExpression(tok)
 
 	// CLOSE | CLOSE_UNESCAPED
+	tokClose := p.shift()
+	if tokClose.Kind != closeToken {
+		errExpected(closeToken, tokClose)
+	}
+
+	result.Strip = ast.NewStrip(tok.Val, tokClose.Val)
+
+	return result
+}
+
+// mustache : OPEN openTag closeTag CLOSE
+func (p *parser) parseSetDelimiter() *ast.SetDelimiterStatement {
+	// OPEN
+	tok := p.shift()
+
+	closeToken := lexer.TokenSetDelimClose
+
+	result := ast.NewSetDelimiterStatement(tok.Pos, tok.Line)
+
+	// openTag closeTag
+	result.Assignment = p.parseNewDelimiters(tok)
+
+	// CLOSE
 	tokClose := p.shift()
 	if tokClose.Kind != closeToken {
 		errExpected(closeToken, tokClose)

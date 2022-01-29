@@ -89,27 +89,8 @@ func testsFromMustacheFile(fileName string) []Test {
 
 // returns true if test must be skipped
 func mustBeSkipped(test mustacheTest, fileName string) bool {
-	// handlebars does not support alternative delimiters
-	return haveAltDelimiter(test) ||
-		// the JS implementation skips those tests
-		fileName == "partials.yml" && (test.Name == "Failed Lookup" || test.Name == "Standalone Indentation")
-}
-
-// returns true if test have alternative delimeter in template or in partials
-func haveAltDelimiter(test mustacheTest) bool {
-	// check template
-	if rAltDelim.MatchString(test.Template) {
-		return true
-	}
-
-	// check partials
-	for _, partial := range test.Partials {
-		if rAltDelim.MatchString(partial) {
-			return true
-		}
-	}
-
-	return false
+	// the JS implementation skips those tests
+	return fileName == "partials.yml" && (test.Name == "Failed Lookup" || test.Name == "Standalone Indentation")
 }
 
 func mustacheTestFiles() []string {

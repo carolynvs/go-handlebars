@@ -103,6 +103,16 @@ var lexTests = []lexTest{
 		[]Token{tokOpen, tokID("foo"), tokClose, tokEOF},
 	},
 	{
+		`tokenizes a mustache set delimiter as ""`,
+		`{{=${ }=}}`,
+		[]Token{tokEOF},
+	},
+	{
+		`change delimiter"`,
+		`{{=${ }=}}${foo}`,
+		[]Token{tokOpen, tokID("foo"), tokClose, tokEOF},
+	},
+	{
 		`supports unescaping with &`,
 		`{{&bar}}`,
 		[]Token{tokOpenAmp, tokID("bar"), tokClose, tokEOF},

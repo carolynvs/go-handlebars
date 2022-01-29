@@ -72,6 +72,7 @@ var parserTests = []parserTest{
 	{"parses an inverse (else-style) section", `{{#foo}} bar {{else}} baz {{/foo}}`, "BLOCK:\n  PATH:foo []\n  PROGRAM:\n    CONTENT[ ' bar ' ]\n  {{^}}\n    CONTENT[ ' baz ' ]\n"},
 	{"parses multiple inverse sections", `{{#foo}} bar {{else if bar}}{{else}} baz {{/foo}}`, "BLOCK:\n  PATH:foo []\n  PROGRAM:\n    CONTENT[ ' bar ' ]\n  {{^}}\n    BLOCK:\n      PATH:if [PATH:bar]\n      PROGRAM:\n      {{^}}\n        CONTENT[ ' baz ' ]\n"},
 	{"parses empty blocks", `{{#foo}}{{/foo}}`, "BLOCK:\n  PATH:foo []\n  PROGRAM:\n"},
+	{"parses set delimiter", `{{=a b=}}`, "{{= OPEN:\n  DELIM:  a\n  DELIM:  b\nCLOSE:\n =}}"},
 	{"parses empty blocks with empty inverse section", `{{#foo}}{{^}}{{/foo}}`, "BLOCK:\n  PATH:foo []\n  PROGRAM:\n  {{^}}\n"},
 	{"parses empty blocks with empty inverse (else-style) section", `{{#foo}}{{else}}{{/foo}}`, "BLOCK:\n  PATH:foo []\n  PROGRAM:\n  {{^}}\n"},
 	{"parses non-empty blocks with empty inverse section", `{{#foo}} bar {{^}}{{/foo}}`, "BLOCK:\n  PATH:foo []\n  PROGRAM:\n    CONTENT[ ' bar ' ]\n  {{^}}\n"},

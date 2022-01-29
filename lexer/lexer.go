@@ -13,13 +13,14 @@ import (
 //   - https://github.com/wycats/handlebars.js/blob/master/src/handlebars.l
 //   - https://github.com/golang/go/blob/master/src/text/template/parse/lex.go
 
-const (
+var (
 	// Mustaches detection
 	escapedEscapedOpenMustache  = "\\\\{{"
 	escapedOpenMustache         = "\\{{"
 	openMustache                = "{{"
 	closeMustache               = "}}"
 	closeStripMustache          = "~}}"
+	closeSetDelimMustache       = "=}}"
 	closeUnescapedStripMustache = "}~}}"
 )
 
@@ -73,6 +74,8 @@ var (
 	// {{ or {{&
 	rOpen            = regexp.MustCompile(`^\{\{~?&?`)
 	rClose           = regexp.MustCompile(`^~?\}\}`)
+	rSetDelimOpen    = regexp.MustCompile(`^` + regexp.QuoteMeta(openMustache) + `=`)
+	rSetDelimClose   = regexp.MustCompile(`^=` + regexp.QuoteMeta(closeMustache))
 	rOpenBlockParams = regexp.MustCompile(`^as\s+\|`)
 	// {{!--  ... --}}
 	rOpenCommentDash  = regexp.MustCompile(`^\{\{~?!--\s*`)
@@ -81,6 +84,16 @@ var (
 	rOpenComment  = regexp.MustCompile(`^\{\{~?!\s*`)
 	rCloseComment = regexp.MustCompile(`^\s*~?\}\}`)
 )
+
+func getROpen() *regexp.Regexp {
+	r := `^` + regexp.QuoteMeta(openMustache) + `~?&?`
+	return regexp.MustCompile(r)
+}
+
+func getRClose() *regexp.Regexp {
+	r := `^~?` + regexp.QuoteMeta(closeMustache)
+	return regexp.MustCompile(r)
+}
 
 // Scan scans given input.
 //
@@ -356,6 +369,10 @@ func lexOpenMustache(l *Lexer) lexFunc {
 		tok = TokenOpenInverse
 	} else if str = l.findRegexp(rOpenInverseChain); str != "" {
 		tok = TokenOpenInverseChain
+	} else if str = l.findRegexp(rSetDelimOpen); str != "" {
+		l.pos += len(str)
+		l.ignore()
+		return lexDelimiterAssignment
 	} else if str = l.findRegexp(rOpen); str != "" {
 		tok = TokenOpen
 	} else {
@@ -394,10 +411,40 @@ func lexCloseMustache(l *Lexer) lexFunc {
 	return lexContent
 }
 
+func lexDelimiterAssignment(l *Lexer) lexFunc {
+	newOpenTag := l.findRegexp(regexp.MustCompile(`[^ ]+`))
+	l.pos += len(newOpenTag)
+	l.ignore()
+
+	r := l.next()
+	if r != ' ' {
+		return l.errorf("Unexpected character in expression: '%c'", r)
+	}
+	l.ignore()
+
+	newCloseTag := l.findRegexp(regexp.MustCompile(`[^=]+`))
+	l.pos += len(newCloseTag)
+	l.ignore()
+
+	oldCloseTag := l.findRegexp(rSetDelimClose)
+	if oldCloseTag == "" {
+		return l.errorf("Expected closeDelimiter tag")
+	}
+	l.pos += len(oldCloseTag)
+	l.ignore()
+
+	//openMustache = newOpenTag
+	//closeMustache = newCloseTag
+	//rOpen = getROpen()
+	//rClose = getRClose()
+
+	return lexContent
+}
+
 // lexExpression scans inside mustaches
 func lexExpression(l *Lexer) lexFunc {
 	// search close mustache delimiter
-	if l.isString(closeMustache) || l.isString(closeStripMustache) || l.isString(closeUnescapedStripMustache) {
+	if l.isString(closeMustache) || l.isString(closeSetDelimMustache) || l.isString(closeStripMustache) || l.isString(closeUnescapedStripMustache) {
 		return lexCloseMustache
 	}
 

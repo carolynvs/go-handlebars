@@ -322,6 +322,19 @@ func (v *whitespaceVisitor) VisitMustache(mustache *ast.MustacheStatement) inter
 	return mustache.Strip
 }
 
+func (v *whitespaceVisitor) VisitSetDelimiter(stmt *ast.SetDelimiterStatement) interface{} {
+	return stmt.Strip
+}
+
+// TODO(carolynvs): rename to DelimiterAssignment
+func (v *whitespaceVisitor) VisitNewDelimiter(stmt *ast.NewDelimiterStatement) interface{} {
+	return nil
+}
+
+func (v *whitespaceVisitor) VisitDelimiter(delim *ast.Delimiter) interface{} {
+	return nil
+}
+
 func _inlineStandalone(strip *ast.Strip) interface{} {
 	return &ast.Strip{
 		Open:             strip.Open,
