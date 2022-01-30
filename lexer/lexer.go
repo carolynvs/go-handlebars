@@ -13,16 +13,6 @@ import (
 //   - https://github.com/wycats/handlebars.js/blob/master/src/handlebars.l
 //   - https://github.com/golang/go/blob/master/src/text/template/parse/lex.go
 
-const (
-	// Mustaches detection
-	escapedEscapedOpenMustache  = "\\\\{{"
-	escapedOpenMustache         = "\\{{"
-	openMustache                = "{{"
-	closeMustache               = "}}"
-	closeStripMustache          = "~}}"
-	closeUnescapedStripMustache = "}~}}"
-)
-
 const eof = -1
 
 // lexFunc represents a function that returns the next lexer function.
@@ -43,6 +33,46 @@ type Lexer struct {
 	// the shameful contextual properties needed because `nextFunc` is not enough
 	closeComment *regexp.Regexp // regexp to scan close of current comment
 	rawBlock     bool           // are we parsing a raw block content ?
+
+	// Mustaches detection
+	escapedEscapedOpenMustache  string
+	escapedOpenMustache         string
+	openMustache                string
+	closeMustache               string
+	closeStripMustache          string
+	closeSetDelimMustache       string
+	closeUnescapedStripMustache string
+
+	// regular expressions
+	rID                  *regexp.Regexp
+	rDotID               *regexp.Regexp
+	rTrue                *regexp.Regexp
+	rFalse               *regexp.Regexp
+	rOpenRaw             *regexp.Regexp
+	rCloseRaw            *regexp.Regexp
+	rOpenEndRaw          *regexp.Regexp
+	rOpenEndRawLookAhead *regexp.Regexp
+	rOpenUnescaped       *regexp.Regexp
+	rCloseUnescaped      *regexp.Regexp
+	rOpenBlock           *regexp.Regexp
+	rOpenEndBlock        *regexp.Regexp
+	rOpenPartial         *regexp.Regexp
+	// {{^}} or {{else}}
+	rInverse          *regexp.Regexp
+	rOpenInverse      *regexp.Regexp
+	rOpenInverseChain *regexp.Regexp
+	// {{ or {{&
+	rOpen            *regexp.Regexp
+	rClose           *regexp.Regexp
+	rSetDelimOpen    *regexp.Regexp
+	rSetDelimClose   *regexp.Regexp
+	rOpenBlockParams *regexp.Regexp
+	// {{!--  ... --}}
+	rOpenCommentDash  *regexp.Regexp
+	rCloseCommentDash *regexp.Regexp
+	// {{! ... }}
+	rOpenComment  *regexp.Regexp
+	rCloseComment *regexp.Regexp
 }
 
 var (
@@ -51,36 +81,49 @@ var (
 
 	// characters not allowed in an identifier
 	unallowedIDChars = " \n\t!\"#%&'()*+,./;<=>@[\\]^`{|}~"
+)
+
+func (l *Lexer) setDelimiters(openTag string, closeTag string) {
+	// Mustaches detection
+	l.openMustache = openTag
+	l.closeMustache = closeTag
+	l.escapedEscapedOpenMustache = "\\\\" + openTag
+	l.escapedOpenMustache = "\\" + openTag
+	l.closeStripMustache = "~" + closeTag
+	l.closeSetDelimMustache = "=" + closeTag
+	l.closeUnescapedStripMustache = "}~}}" // TODO: what the heck is this?
 
 	// regular expressions
-	rID                  = regexp.MustCompile(`^[^` + regexp.QuoteMeta(unallowedIDChars) + `]+`)
-	rDotID               = regexp.MustCompile(`^\.` + lookheadChars)
-	rTrue                = regexp.MustCompile(`^true` + literalLookheadChars)
-	rFalse               = regexp.MustCompile(`^false` + literalLookheadChars)
-	rOpenRaw             = regexp.MustCompile(`^\{\{\{\{`)
-	rCloseRaw            = regexp.MustCompile(`^\}\}\}\}`)
-	rOpenEndRaw          = regexp.MustCompile(`^\{\{\{\{/`)
-	rOpenEndRawLookAhead = regexp.MustCompile(`\{\{\{\{/`)
-	rOpenUnescaped       = regexp.MustCompile(`^\{\{~?\{`)
-	rCloseUnescaped      = regexp.MustCompile(`^\}~?\}\}`)
-	rOpenBlock           = regexp.MustCompile(`^\{\{~?#`)
-	rOpenEndBlock        = regexp.MustCompile(`^\{\{~?/`)
-	rOpenPartial         = regexp.MustCompile(`^\{\{~?>`)
+	l.rID = regexp.MustCompile(`^[^` + regexp.QuoteMeta(unallowedIDChars) + `]+`)
+	l.rDotID = regexp.MustCompile(`^\.` + lookheadChars)
+	l.rTrue = regexp.MustCompile(`^true` + literalLookheadChars)
+	l.rFalse = regexp.MustCompile(`^false` + literalLookheadChars)
+	l.rOpenRaw = regexp.MustCompile(`^` + regexp.QuoteMeta(openTag+openTag))
+	l.rCloseRaw = regexp.MustCompile(`^` + regexp.QuoteMeta(closeTag+closeTag))
+	l.rOpenEndRaw = regexp.MustCompile(`^` + regexp.QuoteMeta(openTag+openTag) + `/`)
+	l.rOpenEndRawLookAhead = regexp.MustCompile(regexp.QuoteMeta(openTag+openTag) + `/`)
+	l.rOpenUnescaped = regexp.MustCompile(`^` + regexp.QuoteMeta(openTag) + `~?\{`) // TODO: what's up with the training {?
+	l.rCloseUnescaped = regexp.MustCompile(`^\}~?` + regexp.QuoteMeta(closeTag))
+	l.rOpenBlock = regexp.MustCompile(`^` + regexp.QuoteMeta(openTag) + `~?#`)
+	l.rOpenEndBlock = regexp.MustCompile(`^` + regexp.QuoteMeta(openTag) + `~?/`)
+	l.rOpenPartial = regexp.MustCompile(`^` + regexp.QuoteMeta(openTag) + `~?>`)
 	// {{^}} or {{else}}
-	rInverse          = regexp.MustCompile(`^(\{\{~?\^\s*~?\}\}|\{\{~?\s*else\s*~?\}\})`)
-	rOpenInverse      = regexp.MustCompile(`^\{\{~?\^`)
-	rOpenInverseChain = regexp.MustCompile(`^\{\{~?\s*else`)
+	l.rInverse = regexp.MustCompile(`^(` + regexp.QuoteMeta(openTag) + `~?\^\s*~?` + regexp.QuoteMeta(closeTag) + `|` + regexp.QuoteMeta(openTag) + `~?\s*else\s*~?` + regexp.QuoteMeta(closeTag) + `)`)
+	l.rOpenInverse = regexp.MustCompile(`^` + regexp.QuoteMeta(openTag) + `~?\^`)
+	l.rOpenInverseChain = regexp.MustCompile(`^` + regexp.QuoteMeta(openTag) + `~?\s*else`)
 	// {{ or {{&
-	rOpen            = regexp.MustCompile(`^\{\{~?&?`)
-	rClose           = regexp.MustCompile(`^~?\}\}`)
-	rOpenBlockParams = regexp.MustCompile(`^as\s+\|`)
+	l.rOpen = regexp.MustCompile(`^` + regexp.QuoteMeta(openTag) + `~?&?`)
+	l.rClose = regexp.MustCompile(`^~?` + regexp.QuoteMeta(closeTag))
+	l.rSetDelimOpen = regexp.MustCompile(`^` + regexp.QuoteMeta(openTag) + `=`)
+	l.rSetDelimClose = regexp.MustCompile(`^=` + regexp.QuoteMeta(closeTag))
+	l.rOpenBlockParams = regexp.MustCompile(`^as\s+\|`)
 	// {{!--  ... --}}
-	rOpenCommentDash  = regexp.MustCompile(`^\{\{~?!--\s*`)
-	rCloseCommentDash = regexp.MustCompile(`^\s*--~?\}\}`)
+	l.rOpenCommentDash = regexp.MustCompile(`^` + regexp.QuoteMeta(openTag) + `~?!--\s*`)
+	l.rCloseCommentDash = regexp.MustCompile(`^\s*--~?` + regexp.QuoteMeta(closeTag) + ``)
 	// {{! ... }}
-	rOpenComment  = regexp.MustCompile(`^\{\{~?!\s*`)
-	rCloseComment = regexp.MustCompile(`^\s*~?\}\}`)
-)
+	l.rOpenComment = regexp.MustCompile(`^` + regexp.QuoteMeta(openTag) + `~?!\s*`)
+	l.rCloseComment = regexp.MustCompile(`^\s*~?` + regexp.QuoteMeta(closeTag) + ``)
+}
 
 // Scan scans given input.
 //
@@ -133,6 +176,8 @@ func (l *Lexer) NextToken() Token {
 
 // run starts lexical analysis
 func (l *Lexer) run() {
+	l.setDelimiters("{{", "}}")
+
 	for l.nextFunc = lexContent; l.nextFunc != nil; {
 		l.nextFunc = l.nextFunc(l)
 	}
@@ -254,7 +299,7 @@ func lexContent(l *Lexer) lexFunc {
 	var next lexFunc
 
 	if l.rawBlock {
-		if i := l.indexRegexp(rOpenEndRawLookAhead); i != -1 {
+		if i := l.indexRegexp(l.rOpenEndRawLookAhead); i != -1 {
 			// {{{{/
 			l.rawBlock = false
 			l.pos += i
@@ -263,7 +308,7 @@ func lexContent(l *Lexer) lexFunc {
 		} else {
 			return l.errorf("Unclosed raw block")
 		}
-	} else if l.isString(escapedEscapedOpenMustache) {
+	} else if l.isString(l.escapedEscapedOpenMustache) {
 		// \\{{
 
 		// emit content with only one escaped escape
@@ -275,20 +320,20 @@ func lexContent(l *Lexer) lexFunc {
 		l.ignore()
 
 		next = lexContent
-	} else if l.isString(escapedOpenMustache) {
+	} else if l.isString(l.escapedOpenMustache) {
 		// \{{
 		next = lexEscapedOpenMustache
-	} else if str := l.findRegexp(rOpenCommentDash); str != "" {
+	} else if str := l.findRegexp(l.rOpenCommentDash); str != "" {
 		// {{!--
-		l.closeComment = rCloseCommentDash
+		l.closeComment = l.rCloseCommentDash
 
 		next = lexComment
-	} else if str := l.findRegexp(rOpenComment); str != "" {
+	} else if str := l.findRegexp(l.rOpenComment); str != "" {
 		// {{!
-		l.closeComment = rCloseComment
+		l.closeComment = l.rCloseComment
 
 		next = lexComment
-	} else if l.isString(openMustache) {
+	} else if l.isString(l.openMustache) {
 		// {{
 		next = lexOpenMustache
 	}
@@ -336,27 +381,31 @@ func lexOpenMustache(l *Lexer) lexFunc {
 
 	nextFunc := lexExpression
 
-	if str = l.findRegexp(rOpenEndRaw); str != "" {
+	if str = l.findRegexp(l.rOpenEndRaw); str != "" {
 		tok = TokenOpenEndRawBlock
-	} else if str = l.findRegexp(rOpenRaw); str != "" {
+	} else if str = l.findRegexp(l.rOpenRaw); str != "" {
 		tok = TokenOpenRawBlock
 		l.rawBlock = true
-	} else if str = l.findRegexp(rOpenUnescaped); str != "" {
+	} else if str = l.findRegexp(l.rOpenUnescaped); str != "" {
 		tok = TokenOpenUnescaped
-	} else if str = l.findRegexp(rOpenBlock); str != "" {
+	} else if str = l.findRegexp(l.rOpenBlock); str != "" {
 		tok = TokenOpenBlock
-	} else if str = l.findRegexp(rOpenEndBlock); str != "" {
+	} else if str = l.findRegexp(l.rOpenEndBlock); str != "" {
 		tok = TokenOpenEndBlock
-	} else if str = l.findRegexp(rOpenPartial); str != "" {
+	} else if str = l.findRegexp(l.rOpenPartial); str != "" {
 		tok = TokenOpenPartial
-	} else if str = l.findRegexp(rInverse); str != "" {
+	} else if str = l.findRegexp(l.rInverse); str != "" {
 		tok = TokenInverse
 		nextFunc = lexContent
-	} else if str = l.findRegexp(rOpenInverse); str != "" {
+	} else if str = l.findRegexp(l.rOpenInverse); str != "" {
 		tok = TokenOpenInverse
-	} else if str = l.findRegexp(rOpenInverseChain); str != "" {
+	} else if str = l.findRegexp(l.rOpenInverseChain); str != "" {
 		tok = TokenOpenInverseChain
-	} else if str = l.findRegexp(rOpen); str != "" {
+	} else if str = l.findRegexp(l.rSetDelimOpen); str != "" {
+		l.pos += len(str)
+		l.ignore()
+		return lexDelimiterAssignment
+	} else if str = l.findRegexp(l.rOpen); str != "" {
 		tok = TokenOpen
 	} else {
 		// this is rotten
@@ -374,13 +423,13 @@ func lexCloseMustache(l *Lexer) lexFunc {
 	var str string
 	var tok TokenKind
 
-	if str = l.findRegexp(rCloseRaw); str != "" {
+	if str = l.findRegexp(l.rCloseRaw); str != "" {
 		// }}}}
 		tok = TokenCloseRawBlock
-	} else if str = l.findRegexp(rCloseUnescaped); str != "" {
+	} else if str = l.findRegexp(l.rCloseUnescaped); str != "" {
 		// }}}
 		tok = TokenCloseUnescaped
-	} else if str = l.findRegexp(rClose); str != "" {
+	} else if str = l.findRegexp(l.rClose); str != "" {
 		// }}
 		tok = TokenClose
 	} else {
@@ -394,17 +443,54 @@ func lexCloseMustache(l *Lexer) lexFunc {
 	return lexContent
 }
 
+func lexDelimiterAssignment(l *Lexer) lexFunc {
+	// Skip any whitespace
+	for isIgnorable(l.peek()) {
+		l.next()
+	}
+	l.ignore()
+
+	newOpenTag := l.findRegexp(regexp.MustCompile(`[^\s]+`))
+	l.pos += len(newOpenTag)
+	l.ignore()
+
+	for isIgnorable(l.peek()) {
+		l.next()
+	}
+	l.ignore()
+
+	newCloseTag := l.findRegexp(regexp.MustCompile(`[^=\s]+`))
+	l.pos += len(newCloseTag)
+	l.ignore()
+
+	for isIgnorable(l.peek()) {
+		l.next()
+	}
+	l.ignore()
+
+	oldCloseTag := l.findRegexp(l.rSetDelimClose)
+	if oldCloseTag == "" {
+		return l.errorf("Expected closeDelimiter tag")
+	}
+	l.pos += len(oldCloseTag)
+	l.ignore()
+
+	l.setDelimiters(newOpenTag, newCloseTag)
+
+	return lexContent
+}
+
 // lexExpression scans inside mustaches
 func lexExpression(l *Lexer) lexFunc {
 	// search close mustache delimiter
-	if l.isString(closeMustache) || l.isString(closeStripMustache) || l.isString(closeUnescapedStripMustache) {
+	if l.isString(l.closeMustache) || l.isString(l.closeSetDelimMustache) || l.isString(l.closeStripMustache) || l.isString(l.closeUnescapedStripMustache) {
 		return lexCloseMustache
 	}
 
 	// search some patterns before advancing scanning position
 
 	// "as |"
-	if str := l.findRegexp(rOpenBlockParams); str != "" {
+	if str := l.findRegexp(l.rOpenBlockParams); str != "" {
 		l.pos += len(str)
 		l.emit(TokenOpenBlockParams)
 		return lexExpression
@@ -418,21 +504,21 @@ func lexExpression(l *Lexer) lexFunc {
 	}
 
 	// .
-	if str := l.findRegexp(rDotID); str != "" {
+	if str := l.findRegexp(l.rDotID); str != "" {
 		l.pos += len(".")
 		l.emit(TokenID)
 		return lexExpression
 	}
 
 	// true
-	if str := l.findRegexp(rTrue); str != "" {
+	if str := l.findRegexp(l.rTrue); str != "" {
 		l.pos += len("true")
 		l.emit(TokenBoolean)
 		return lexExpression
 	}
 
 	// false
-	if str := l.findRegexp(rFalse); str != "" {
+	if str := l.findRegexp(l.rFalse); str != "" {
 		l.pos += len("false")
 		l.emit(TokenBoolean)
 		return lexExpression
@@ -596,7 +682,7 @@ func (l *Lexer) scanNumber() bool {
 
 // lexIdentifier scans an ID
 func lexIdentifier(l *Lexer) lexFunc {
-	str := l.findRegexp(rID)
+	str := l.findRegexp(l.rID)
 	if len(str) == 0 {
 		// this is rotten
 		panic("Identifier expected")

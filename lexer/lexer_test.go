@@ -25,10 +25,18 @@ func tokComment(val string) Token { return Token{TokenComment, val, 0, 1} }
 var tokEOF = Token{TokenEOF, "", 0, 1}
 var tokEquals = Token{TokenEquals, "=", 0, 1}
 var tokData = Token{TokenData, "@", 0, 1}
-var tokOpen = Token{TokenOpen, "{{", 0, 1}
+
+func makeTokOpen(openTag string) Token {
+	return Token{TokenOpen, openTag, 0, 1}
+}
+func makeTokClose(closeTag string) Token {
+	return Token{TokenClose, closeTag, 0, 1}
+}
+
+var tokOpen = makeTokOpen("{{")
 var tokOpenAmp = Token{TokenOpen, "{{&", 0, 1}
 var tokOpenPartial = Token{TokenOpenPartial, "{{>", 0, 1}
-var tokClose = Token{TokenClose, "}}", 0, 1}
+var tokClose = makeTokClose("}}")
 var tokOpenStrip = Token{TokenOpen, "{{~", 0, 1}
 var tokCloseStrip = Token{TokenClose, "~}}", 0, 1}
 var tokOpenUnescaped = Token{TokenOpenUnescaped, "{{{", 0, 1}
@@ -101,6 +109,21 @@ var lexTests = []lexTest{
 		`tokenizes a simple mustache as "OPEN ID CLOSE"`,
 		`{{foo}}`,
 		[]Token{tokOpen, tokID("foo"), tokClose, tokEOF},
+	},
+	{
+		`tokenizes a mustache set delimiter as ""`,
+		`{{=${ }=}}`,
+		[]Token{tokEOF},
+	},
+	{
+		`change delimiter"`,
+		`{{=${ }=}}${foo}`,
+		[]Token{makeTokOpen("${"), tokID("foo"), makeTokClose("}"), tokEOF},
+	},
+	{
+		`change delimiter, ignores whitespace"`,
+		`{{= ${  } =}}${foo}`,
+		[]Token{makeTokOpen("${"), tokID("foo"), makeTokClose("}"), tokEOF},
 	},
 	{
 		`supports unescaping with &`,
